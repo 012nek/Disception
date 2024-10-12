@@ -247,7 +247,7 @@ const DiscordUIEnhancer = (() => {
                     });
                 } else {
                     // Fallback to fetch if GM_xmlhttpRequest is not available
-                    fetch(targetUrl, {
+                    httpRequest(targetUrl, {
                         method: "GET",
                         headers: {
                             "Content-Type": "application/json",
