@@ -213,38 +213,60 @@ const DiscordUIEnhancer = (() => {
     })();
 
     /*** API Interaction Module ***/
-    const API = (() => {
-        /**
-         * Fetches user data from the external API.
-         * @param {string} userId - The User ID.
-         * @param {string} guildId - The Guild ID.
-         * @returns {Promise<Object|null>} - The API response data or null on failure.
-         */
-        async function fetchUserData(userId, guildId) {
+    const API = {
+        fetchUserData(userId, guildId, httpRequest) {
             const targetUrl = `${Config.API_URL}?user_id=${userId}&guild_id=${guildId}`;
-            try {
-                const response = await fetch(targetUrl, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                });
-                if (!response.ok) {
-                    console.error(`API request failed with status ${response.status}`);
-                    return null;
-                }
-                const data = await response.json();
-                return data;
-            } catch (error) {
-                console.error('Error fetching user data:', error);
-                return null;
-            }
-        }
 
-        return {
-            fetchUserData,
-        };
-    })();
+            return new Promise((resolve) => {
+                if (httpRequest) {
+                    // Use GM_xmlhttpRequest if provided
+                    httpRequest({
+                        method: "GET",
+                        url: targetUrl,
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        onload(response) {
+                            if (response.status >= 200 && response.status < 300) {
+                                try {
+                                    const data = JSON.parse(response.responseText);
+                                    resolve(data);
+                                } catch (e) {
+                                    console.error('Error parsing response JSON:', e);
+                                    resolve(null);
+                                }
+                            } else {
+                                console.error(`API request failed with status ${response.status}`);
+                                resolve(null);
+                            }
+                        },
+                        onerror(err) {
+                            console.error('Error fetching user data:', err);
+                            resolve(null);
+                        }
+                    });
+                } else {
+                    // Fallback to fetch if GM_xmlhttpRequest is not available
+                    fetch(targetUrl, {
+                        method: "GET",
+                        headers: {
+                            "Content-Type": "application/json",
+                        }
+                    }).then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        }
+                        throw new Error('Network response was not ok.');
+                    }).then(data => {
+                        resolve(data);
+                    }).catch(error => {
+                        console.error('Fetch API error:', error);
+                        resolve(null);
+                    });
+                }
+            });
+        }
+    };
 
     /*** Window Manager Module ***/
     const WindowManager = (() => {
@@ -1049,13 +1071,16 @@ const DiscordUIEnhancer = (() => {
         };
     })();
 
-    /*** App Initialization ***/
     const App = {
-        init() {
+        init(httpRequest) {
             Styles.addStyles();
-            new CustomHoverButton();
-        },
+            new CustomHoverButton(httpRequest);  // Pass the GM_xmlhttpRequest
+        }
     };
 
-    return App;
+    return {
+        init: App.init
+    };
 })();
+
+window.DiscordUIEnhancer = DiscordUIEnhancer;
