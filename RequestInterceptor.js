@@ -78,39 +78,42 @@
   }
 
   // XMLHttpRequestInterceptor Class
-  class XMLHttpRequestInterceptor {
-    constructor(ruleEngine) {
-      this.ruleEngine = ruleEngine;
-      this.originalXhrOpen = XMLHttpRequest.prototype.open;
-      this.originalXhrSend = XMLHttpRequest.prototype.send;
-      this.init();
-    }
-
-    init() {
-      XMLHttpRequest.prototype.open = (method, url, ...rest) => {
-        this._url = url;
-        return this.originalXhrOpen.apply(this, [method, url, ...rest]);
-      };
-
-      XMLHttpRequest.prototype.send = function (body) {
-        const xhr = this;
-        if (body) {
-          modifyRequestBody(body, xhr.ruleEngine)
-            .then((modifiedBody) => {
-              console.log(`XMLHttpRequest to ${xhr._url} modified successfully.`);
-              xhr.originalXhrSend.call(xhr, modifiedBody);
-            })
-            .catch((err) => {
-              logError(`Failed to modify XMLHttpRequest to ${xhr._url}.`, err);
-              xhr.originalXhrSend.call(xhr, body);
-            });
-        } else {
-          xhr.originalXhrSend.call(xhr, body);
-        }
-      };
-      console.log("XMLHttpRequest Interceptor Initialized.");
-    }
+class XMLHttpRequestInterceptor {
+  constructor(ruleEngine) {
+    this.ruleEngine = ruleEngine;
+    this.originalXhrOpen = XMLHttpRequest.prototype.open;
+    this.originalXhrSend = XMLHttpRequest.prototype.send;
+    this.init();
   }
+
+  init() {
+    const interceptor = this;
+
+    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+      this._url = url; // Keep track of the URL for logging
+      return interceptor.originalXhrOpen.apply(this, [method, url, ...rest]);
+    };
+
+    XMLHttpRequest.prototype.send = function(body) {
+      const xhr = this; // Preserve context for proper referencing inside Promises
+      if (body) {
+        interceptor.ruleEngine.apply(JSON.stringify(body), 'content') // Apply rules to the content
+          .then((modifiedBody) => {
+            console.log(`XMLHttpRequest to ${xhr._url} modified successfully.`);
+            interceptor.originalXhrSend.call(xhr, modifiedBody);
+          })
+          .catch((err) => {
+            console.error(`Failed to modify XMLHttpRequest to ${xhr._url}.`, err);
+            interceptor.originalXhrSend.call(xhr, body);
+          });
+      } else {
+        interceptor.originalXhrSend.call(xhr, body);
+      }
+    };
+
+    console.log("XMLHttpRequest Interceptor Initialized.");
+  }
+}
 
   // Main RequestInterceptor Class
   class RequestInterceptor {
