@@ -6,8 +6,8 @@ const DiscordUIEnhancer = (() => {
     /*** Configuration Module ***/
     const Config = {
         // Updated selectors to target username and message elements more reliably
-        MESSAGE_SELECTOR: '[id^="chat-messages-"]',
-        USERNAME_SELECTOR: '[class*="username"]',
+        MESSAGE_SELECTOR: '[data-list-item-id]',
+        USERNAME_SELECTOR: '[class*="headerText"] [role="button"]',
         BUTTON_PROCESSED_DATA_ATTR: 'data-hover-button-added',
         CUSTOM_BUTTON_CLASS: 'custom-hover-button',
         SVG_ICON: `
@@ -23,16 +23,64 @@ const DiscordUIEnhancer = (() => {
     const Utils = (() => {
         /**
          * Creates a ripple effect on the target element.
+         * @param {Event} event - The triggering event.
+         * @param {HTMLElement} element - The target element.
          */
         function createRippleEffect(event, element) {
-            // ... (existing code)
+            const circle = document.createElement('span');
+            const diameter = Math.max(element.clientWidth, element.clientHeight);
+            const radius = diameter / 2;
+            Object.assign(circle.style, {
+                width: `${diameter}px`,
+                height: `${diameter}px`,
+                left: `${event.clientX - element.getBoundingClientRect().left - radius}px`,
+                top: `${event.clientY - element.getBoundingClientRect().top - radius}px`,
+                position: 'absolute',
+                background: 'rgba(0, 0, 0, 0.2)',
+                borderRadius: '50%',
+                transform: 'scale(0)',
+                animation: 'ripple 600ms linear',
+                pointerEvents: 'none',
+            });
+            element.appendChild(circle);
+            setTimeout(() => {
+                circle.remove();
+            }, 600);
         }
 
         /**
          * Displays a temporary notification near the specified element.
+         * @param {HTMLElement} element - The reference element.
+         * @param {string} message - The notification message.
          */
         function showTemporaryNotification(element, message) {
-            // ... (existing code)
+            const notification = document.createElement('div');
+            notification.textContent = message;
+            Object.assign(notification.style, {
+                position: 'absolute',
+                backgroundColor: 'var(--background-secondary)',
+                color: Config.TEXT_COLOR,
+                padding: '6px 12px',
+                borderRadius: '4px',
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+                top: `${element.offsetTop - element.offsetHeight - 10}px`,
+                left: `${element.offsetLeft}px`,
+                zIndex: '1001',
+                opacity: '0',
+                transition: 'opacity 0.2s ease-in-out',
+                fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+                pointerEvents: 'none',
+            });
+            element.parentElement.appendChild(notification);
+            requestAnimationFrame(() => {
+                notification.style.opacity = '1';
+            });
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notification.remove();
+                }, 200);
+            }, 1500);
         }
 
         /**
@@ -70,6 +118,8 @@ const DiscordUIEnhancer = (() => {
     const DataExtractor = (() => {
         /**
          * Extracts user information from a message element.
+         * @param {HTMLElement} message - The message element.
+         * @returns {Object} - An object containing username and userId.
          */
         function extractUserInfo(message) {
             let userId = 'Unknown';
@@ -98,35 +148,51 @@ const DiscordUIEnhancer = (() => {
             this.init();
         }
 
+        /**
+         * Initializes the hover button functionality by attaching event listeners.
+         */
         init() {
             const container = document.querySelector('[data-list-id="chat-messages"]') || document.body;
             container.addEventListener('mouseover', this.onMouseOver.bind(this), true);
             container.addEventListener('mouseout', this.onMouseOut.bind(this), true);
         }
 
+        /**
+         * Handles the mouseover event to add the custom hover button.
+         * @param {Event} event - The mouseover event.
+         */
         onMouseOver(event) {
             const usernameElement = event.target.closest(Config.USERNAME_SELECTOR);
             if (usernameElement && !usernameElement.hasAttribute(Config.BUTTON_PROCESSED_DATA_ATTR)) {
                 const message = usernameElement.closest(Config.MESSAGE_SELECTOR);
                 if (message) {
                     const customButton = this.createCustomButton(message);
-                    usernameElement.appendChild(customButton);
+                    usernameElement.parentElement.appendChild(customButton);
                     usernameElement.setAttribute(Config.BUTTON_PROCESSED_DATA_ATTR, 'true');
                 }
             }
         }
 
+        /**
+         * Handles the mouseout event to remove the custom hover button.
+         * @param {Event} event - The mouseout event.
+         */
         onMouseOut(event) {
             const usernameElement = event.target.closest(Config.USERNAME_SELECTOR);
             if (usernameElement && !usernameElement.contains(event.relatedTarget)) {
                 if (usernameElement.hasAttribute(Config.BUTTON_PROCESSED_DATA_ATTR)) {
-                    const customButton = usernameElement.querySelector(`.${Config.CUSTOM_BUTTON_CLASS}`);
+                    const customButton = usernameElement.parentElement.querySelector(`.${Config.CUSTOM_BUTTON_CLASS}`);
                     customButton?.remove();
                     usernameElement.removeAttribute(Config.BUTTON_PROCESSED_DATA_ATTR);
                 }
             }
         }
 
+        /**
+         * Creates the custom hover button element.
+         * @param {HTMLElement} message - The message element to associate with the button.
+         * @returns {HTMLElement} - The custom button element.
+         */
         createCustomButton(message) {
             const button = document.createElement('div');
             button.className = `button_f7e168 ${Config.CUSTOM_BUTTON_CLASS}`;
@@ -197,6 +263,9 @@ const DiscordUIEnhancer = (() => {
 
     /*** Styles Module ***/
     const Styles = (() => {
+        /**
+         * Injects custom CSS styles into the document.
+         */
         function addStyles() {
             const styleSheet = document.createElement('style');
             styleSheet.type = 'text/css';
@@ -213,6 +282,20 @@ const DiscordUIEnhancer = (() => {
                     background-color: var(--background-modifier-hover);
                     border-radius: 4px;
                 }
+                /* Temporary Notification Styles */
+                .temporary-notification {
+                    position: absolute;
+                    background-color: var(--background-secondary);
+                    color: ${Config.TEXT_COLOR};
+                    padding: 6px 12px;
+                    border-radius: 4px;
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+                    z-index: 1001;
+                    opacity: 0;
+                    transition: opacity 0.2s ease-in-out;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    pointer-events: none;
+                }
             `;
             document.head.appendChild(styleSheet);
         }
@@ -222,7 +305,11 @@ const DiscordUIEnhancer = (() => {
         };
     })();
 
+    /*** Main Application Module ***/
     const App = {
+        /**
+         * Initializes the Discord UI Enhancer.
+         */
         init() {
             Styles.addStyles();
             new CustomHoverButton();
